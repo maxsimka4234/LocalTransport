@@ -28,12 +28,10 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
         let (tx, rx) = mpsc::channel();
 
         let tcp_handle = thread::spawn(move || {
-            //C:\Users\макс4234\Desktop\brb2
             println!("открыл тсп1 ");
             let listener = create_stream().unwrap();
             
-           // let listener = listener.accept().unwrap();
-            println!("открыл тсп {:?}", &listener);
+            println!("открыл принятие {:?}", &listener);
             
             tx.send(listener).expect("send failed");
         });
@@ -48,16 +46,14 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
 
         
         let mdns = ServiceDaemon::new()?; 
-        println!("мднс {:#?}", mdns.monitor());
         let servise_info = ServiceInfo::new(service_type, instance_name, host_name, local_ip, local_addr.port(), None)?;
-        println!("мднс зареган {:#?}", servise_info);
         mdns.register(servise_info)?;
         
         
         
         let mut stream = stream.accept()?;
 
-        println!("беб {:?}", &stream.0);
+        println!("Запустил поток! {:?}", &stream.0);
 
         getting_file(&mut stream.0, &path)?;
 
@@ -74,15 +70,12 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
         if !has_path(&path){println!("Не путь!"); return Err(Box::new(std::io::Error::new(io::ErrorKind::IsADirectory, "Не путь!")));}
 
        // if !fs::metadata(&path).is_ok() {println!("Файл не найден ");  return Err(Box::new(std::io::Error::new(io::ErrorKind::InvalidFilename, "Файл не найден!")));};
-        // C:\Users\макс4234\Desktop\brb\На экстренный случай.exe
         let path = path.trim();
 
         let mdns = ServiceDaemon::new()?;
 
         let receiver = mdns.browse(service_type)?;
         println!("Ищу хост... ");
-        
-         println!("Ищу хост проверка... {:?}", receiver);
         while let Ok(event) = receiver.recv() {
             match event {
                 
@@ -212,7 +205,7 @@ fn server_test()-> std::io::Result<()>  {
     let temp_file_get = tempfile::NamedTempFile::new()?;
     let mut temp_file_send = tempfile::NamedTempFile::new()?;
 
-    writeln!(&mut temp_file_send, "Возможно тут типо большой да очень файл .exe ааа дааа оооо ууеее бббеееб да файл большой просто")?;
+    writeln!(&mut temp_file_send, "Возможно тут большой очень файл .exeооооооооооооооооо")?;
     let tfg2 = fs::read(&temp_file_send)?;
 
     let stream = TcpListener::bind("127.0.0.1:5656")?;
