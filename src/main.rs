@@ -185,7 +185,7 @@ fn getting_file(stream: &mut TcpStream, path: &str) -> std::io::Result<()>{
         return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Ошибка в получении файла"));
     }
 
-    println!("Файл получен");
+    println!("Файл получен!");
     Ok(())
 }
 
