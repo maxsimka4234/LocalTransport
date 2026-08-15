@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mdns-sd = "0.20.3"
+mdns-sd = "0.21.0"
 tempfile = "3.27.0"
 local-ip-address = "0.6.13"
