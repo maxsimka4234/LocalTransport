@@ -1,4 +1,5 @@
-use std::{ fs::{self, File}, io::{self, Read, Write}, net::{TcpListener, TcpStream}, path::{Path, PathBuf}, sync::mpsc, thread};
+use std::{ collections::HashSet, fs::{File}, io::{self, Read, Write}, net::{TcpListener, TcpStream}, path::{Path}, sync::mpsc, thread};
+use indicatif::ProgressBar;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 
 fn hello() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,7 +13,8 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
     let service_type = "_localTransfer._tcp.local.";
     let instance_name = "my-localTransfer-instance";
     let host_name = "my-localTransfer-host.local.";
-    let local_ip = local_ip_address::local_ip()?;
+    let local_ip = real_addr()?;
+    //local_ip_address::local_ip()?; 
 
     
     if input == 1 {
@@ -109,6 +111,26 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn real_addr() -> std::io::Result<std::net::IpAddr>{
+    let interfaces = if_addrs::get_if_addrs()?;
+    let mut is_local = HashSet::new();
+    for interface in interfaces {
+        match interface.ip() {
+            std::net::IpAddr::V4(ipv4) => {
+                if ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168 {
+                    is_local.insert(interface.ip());
+                }
+            }
+            std::net::IpAddr::V6(_) => {/*is_local.insert(interface.ip());*/}
+        }
+       // if interface.ip().to_string().contains("192.168") {
+       //     println!("interface{:?}", interface)
+      //  }
+    }
+    let interfaces:Vec<std::net::IpAddr> = is_local.into_iter().collect();
+    Ok(interfaces[rand::random_range(..interfaces.len())])
+}
+
 
 
 fn has_path(path: &str) -> bool{
@@ -117,14 +139,14 @@ fn has_path(path: &str) -> bool{
 }
 
 fn create_stream() -> std::io::Result<TcpListener>{
-    let addr = "127.0.0.1:0";
+    let addr = "0.0.0.0:0";
 
     TcpListener::bind(addr)
 }
 
 
 fn send_file(path: &str, mut stream: TcpStream) -> std::io::Result<()>{
-    let mut file = File::open(path)?;
+    let file = File::open(path)?;
     let file_name = std::path::Path::new(path).file_name().ok_or(io::Error::new(io::ErrorKind::NotFound,"Отсутсвует"))?.to_string_lossy();
 
     let name_bytes = file_name.as_bytes();
@@ -133,8 +155,13 @@ fn send_file(path: &str, mut stream: TcpStream) -> std::io::Result<()>{
 
     let bytes = file.metadata()?.len();
     stream.write_all(&bytes.to_be_bytes())?;
+    
+    println!("Отправляю файл");
 
-    let bytes_copy = io::copy(&mut file, &mut stream)?;
+    let pb = ProgressBar::new(bytes);
+    let mut file_reader = pb.wrap_read(file);
+    let bytes_copy = io::copy(&mut file_reader, &mut stream)?;
+
     println!("Отправлено байт {}", bytes_copy);
     Ok(())
 }
@@ -155,7 +182,9 @@ fn getting_file(stream: &mut TcpStream, path: &str) -> std::io::Result<()>{
 
 
     let mut file = File::create(format!("{}/{}", path, file_name))?;
-    let mut limited_reader = stream.take(file_len);
+    
+    let pb = ProgressBar::new(file_len);
+    let mut limited_reader = pb.wrap_read(stream.take(file_len));
 
     let bytes_written = std::io::copy(&mut limited_reader, &mut file)?;
 
