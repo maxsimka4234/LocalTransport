@@ -1,0 +1,130 @@
+use std::{collections::HashSet, fs::{self, File}, io::{self, Read, Write}, net::TcpStream, path::{Path, PathBuf}};
+use indicatif::ProgressBar;
+use rand::seq::IndexedRandom;
+
+pub fn send_file(path: &str, stream: &mut TcpStream) -> std::io::Result<()>{
+    let file = File::open(path)?;
+    let file_name = Path::new(path).file_name().ok_or(io::Error::new(io::ErrorKind::NotFound,"Отсутствует"))?.to_string_lossy();
+
+    let name_bytes = file_name.as_bytes();
+    stream.write_all(&(name_bytes.len() as u32).to_be_bytes())?;
+    stream.write_all(name_bytes)?;
+
+    let bytes = file.metadata()?.len();
+    stream.write_all(&bytes.to_be_bytes())?;
+    
+    println!("Отправляю файл");
+
+    let pb = ProgressBar::new(bytes);
+    let mut file_reader = pb.wrap_read(file);
+    let bytes_copy = io::copy(&mut file_reader, stream)?;
+
+    println!("Отправлено байт {}", bytes_copy);
+    Ok(())
+}
+
+pub fn getting_file(stream: &mut TcpStream, path: &str) -> std::io::Result<()>{
+    // TcpStream отдельно от TcpListener чтобы accept() не сбрасывался после окончания принятия
+    let mut len_buf = [0u8; 4];
+    stream.read_exact(&mut len_buf)?;
+    let name_len = u32::from_be_bytes(len_buf) as usize;
+
+    let mut name_buf = vec![0u8; name_len];
+    stream.read_exact(&mut name_buf)?;
+    let file_name = String::from_utf8_lossy(&name_buf);
+
+    let mut buf = [0u8; 8];
+    stream.read_exact(&mut buf)?;
+    let file_len = u64::from_be_bytes(buf);
+
+    let mut file = if path.ends_with("/") { File::create(format!("{}{}", path, file_name))? } else {
+        File::create(format!("{}/{}", path, file_name))?
+    };
+    
+    let pb = ProgressBar::new(file_len);
+    let mut limited_reader = pb.wrap_read(stream.take(file_len));
+
+    let bytes_written = std::io::copy(&mut limited_reader, &mut file)?;
+
+    if bytes_written != file_len {
+        return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Ошибка в получении файла"));
+    }
+
+    println!("Файл получен!");
+    Ok(())
+}
+
+fn send_quantity(pathes: Vec<PathBuf>, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>>{
+    // Отправлять количество файлов, после принимать getting_file столько раз, сколько это нужно 
+    
+    let path_quantity = pathes.len();
+    println!("Отправляю количество файлов: {} ",path_quantity);
+    let path_quantity = path_quantity.to_be_bytes();
+
+    stream.write_all(&path_quantity)?;
+    Ok(())
+}
+
+pub fn get_quantity(stream: &mut TcpStream) -> Result<u64, Box<dyn std::error::Error>>{
+    let mut buf = [0u8; 8];
+    stream.read_exact(&mut buf)?;
+    let file_quantity = u64::from_be_bytes(buf);
+
+    println!("Принял количество файлов: {}", file_quantity);
+    Ok(file_quantity)
+}
+
+fn send_directory(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            send_directory(&path, stream)?;
+        } else {
+            send_file(&path.to_string_lossy(), stream)?;
+        }
+    }   
+    Ok(())
+}
+
+fn files_quantity(path: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>>{
+    let mut pathes = Vec::new();
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        // считает количество файлов
+
+        if path.is_dir() {
+            pathes.extend(files_quantity(&path)?);
+        } else {
+            pathes.push(path);
+        }
+    }   
+    Ok(pathes)
+}
+
+pub fn send_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    let files = files_quantity(path)?;
+    send_quantity(files,stream)?;
+
+    send_directory(path, stream)
+}
+
+pub fn get_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>>{
+    let quantity = get_quantity(stream);
+
+    if quantity.is_err() {
+        getting_file(stream, &path.to_string_lossy())?;
+    }
+
+    let mut quantity = quantity?;
+
+    while quantity != 0 {
+        getting_file(stream, &path.to_string_lossy())?;
+        quantity -= 1;
+        println!("Отправлено! ")
+    }
+    
+    Ok(())
+}
