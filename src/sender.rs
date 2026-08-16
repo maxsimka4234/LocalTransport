@@ -80,14 +80,14 @@ pub fn itfile(stream: &mut TcpStream, is_file: bool)-> Result<(), Box<dyn std::e
     }  
 }
 
-pub fn get_quantity(stream: &mut TcpStream) -> Result<u64, Box<dyn std::error::Error>>{
+pub fn get_quantity(stream: &mut TcpStream) -> Result<u32, Box<dyn std::error::Error>>{
     let mut buf = [0u8];
     stream.read_exact(&mut buf)?;
 
     if buf[0] != 1 {
-        let mut buf = [0u8; 8];
+        let mut buf = [0u8; 4];
         stream.read_exact(&mut buf)?;
-        let file_quantity = u64::from_be_bytes(buf);
+        let file_quantity = u32::from_be_bytes(buf);
         println!("Принял количество файлов: {}", file_quantity);
         Ok(file_quantity)
     } else {
@@ -99,7 +99,9 @@ fn send_directory(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn 
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let path = entry.path();
-
+        if path.is_symlink() {
+            continue;
+        }
         if path.is_dir() {
             send_directory(&path, stream)?;
         } else {
@@ -115,7 +117,9 @@ fn files_quantity(path: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Er
         let entry = entry?;
         let path = entry.path();
         // считает количество файлов
-
+        if path.is_symlink() {
+            continue;
+        }
         if path.is_dir() {
             pathes.extend(files_quantity(&path)?);
         } else {
