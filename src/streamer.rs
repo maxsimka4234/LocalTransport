@@ -44,7 +44,7 @@ pub fn receiver(service_type: &str) -> Result<(TcpStream, SocketAddr), Box<dyn s
     let host_name = "my-localTransfer-host.local.";
     let local_ip = real_addr()?;
 
-    let listener = create_stream().unwrap();      
+    let listener = create_stream()?;      
 
     println!("Запуск TCP ");
     
