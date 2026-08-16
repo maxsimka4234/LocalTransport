@@ -7,15 +7,14 @@ mod streamer; mod sender;
 
 fn hello() -> Result<(), Box<dyn std::error::Error>> {
     println!("Здравствуй! 1 - принимает файл (путь к итогу), 2 - отправляет файл (путь к файлу) ");
-   // let mut addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5656);
+
     
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Не строка");
     let input = input.trim().parse::<u8>().expect("Не число");
 
     let service_type = "_localTransfer._tcp.local.";
-   
-    //local_ip_address::local_ip()?; 
+ 
 
     match input {
         1 => {
@@ -37,7 +36,7 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         _ => {
-            //println!("Понял, принимаю {}", addr);
+
         println!("Понял, я отправляю.\n Закончим настройку");
         println!("Укажите путь отправки файла: ");
 

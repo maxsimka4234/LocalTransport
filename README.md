@@ -35,7 +35,7 @@
 ### Установка и запуск
 
 ```bash
-git clone https://github.com/ваш-ник/название-проекта.git
+git clone https://github.com/maxsimka4234/LocalTransport.git
 cd LocalTransport
 cargo run
 ```

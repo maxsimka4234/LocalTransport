@@ -138,10 +138,6 @@ pub fn get_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std
     
     let quantity = get_quantity(stream);
 
-   /*  if quantity.is_err() {
-        getting_file(stream, &path.to_string_lossy())?;
-    }*/
-
     let mut quantity = quantity?;
     if quantity != 0 {
     while quantity != 0 {
