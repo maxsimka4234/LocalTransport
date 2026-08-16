@@ -1,7 +1,7 @@
 use std::{ collections::HashSet, io::{self}, net::{SocketAddr, TcpListener, TcpStream}, path::{Path, PathBuf}};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 
-use crate::sender::{send_all, send_file};
+use crate::sender::{itfile, send_all, send_file};
 
 
 pub fn real_addr() -> std::io::Result<std::net::IpAddr>{
@@ -84,9 +84,13 @@ pub fn send(service_type: &str, path: &str) -> Result<(), Box<dyn std::error::Er
                     
                     let path = PathBuf::from(path);
                     if path.is_dir() {
+                        println!("это директория");
+                        itfile(&mut stream, false)?;
                         send_all(&path, &mut stream)?;
                     } else {
-                        send_file(&path.to_string_lossy(), &mut stream)?;
+                        println!("это файл");
+                        itfile(&mut stream, true)?;
+                        send_file(&path.to_string_lossy(), &mut stream)?; 
                     }
                     
                 }

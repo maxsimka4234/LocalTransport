@@ -33,6 +33,7 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
         let path = PathBuf::from(path);
 
         get_all(&path, &mut stream.0)?;
+        
         }
 
         _ => {

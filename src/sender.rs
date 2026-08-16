@@ -1,6 +1,6 @@
-use std::{collections::HashSet, fs::{self, File}, io::{self, Read, Write}, net::TcpStream, path::{Path, PathBuf}};
+use std::{fs::{self, File}, io::{self, Read, Write}, net::TcpStream, path::{Path, PathBuf}};
 use indicatif::ProgressBar;
-use rand::seq::IndexedRandom;
+
 
 pub fn send_file(path: &str, stream: &mut TcpStream) -> std::io::Result<()>{
     let file = File::open(path)?;
@@ -65,13 +65,34 @@ fn send_quantity(pathes: Vec<PathBuf>, stream: &mut TcpStream) -> Result<(), Box
     Ok(())
 }
 
-pub fn get_quantity(stream: &mut TcpStream) -> Result<u64, Box<dyn std::error::Error>>{
-    let mut buf = [0u8; 8];
-    stream.read_exact(&mut buf)?;
-    let file_quantity = u64::from_be_bytes(buf);
+pub fn itfile(stream: &mut TcpStream, is_file: bool)-> Result<(), Box<dyn std::error::Error>> {
+    match is_file {
+        true => {   
+            let buf = [1u8];
+            stream.write_all(&buf)?;
+            Ok(())
+        }
+        false => {
+            let buf = [0u8];
+            stream.write_all(&buf)?;
+            Ok(())
+        }
+    }  
+}
 
-    println!("Принял количество файлов: {}", file_quantity);
-    Ok(file_quantity)
+pub fn get_quantity(stream: &mut TcpStream) -> Result<u64, Box<dyn std::error::Error>>{
+    let mut buf = [0u8];
+    stream.read_exact(&mut buf)?;
+
+    if buf[0] != 1 {
+        let mut buf = [0u8; 8];
+        stream.read_exact(&mut buf)?;
+        let file_quantity = u64::from_be_bytes(buf);
+        println!("Принял количество файлов: {}", file_quantity);
+        Ok(file_quantity)
+    } else {
+        Ok(0)
+    }
 }
 
 fn send_directory(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
@@ -112,18 +133,21 @@ pub fn send_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn st
 }
 
 pub fn get_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>>{
+    
     let quantity = get_quantity(stream);
 
-    if quantity.is_err() {
+   /*  if quantity.is_err() {
         getting_file(stream, &path.to_string_lossy())?;
-    }
+    }*/
 
     let mut quantity = quantity?;
-
+    if quantity != 0 {
     while quantity != 0 {
         getting_file(stream, &path.to_string_lossy())?;
         quantity -= 1;
         println!("Отправлено! ")
+    } } else {
+        getting_file(stream, &path.to_string_lossy())?;
     }
     
     Ok(())
