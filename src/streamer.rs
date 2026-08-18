@@ -90,7 +90,8 @@ pub fn send(service_type: &str, path: &str) -> Result<(), Box<dyn std::error::Er
                     } else {
                         println!("это файл");
                         itfile(&mut stream, true)?;
-                        send_file(&path.to_string_lossy(), &mut stream)?; 
+                        let file_name = path.file_name().ok_or("Ошибка в имени файла")?.to_string_lossy();
+                        send_file(&path.to_string_lossy(), &file_name, &mut stream)?; 
                     }
                     
                 }

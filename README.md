@@ -3,7 +3,7 @@
 
 [![Статус сборки](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](https://example.com)
 [![Лицензия](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Версия](https://img.shields.io/badge/version-1.0.0-orange?style=for-the-badge)](https://example.com)
+[![Версия](https://img.shields.io/badge/version-0.1.0-orange?style=for-the-badge)](https://example.com)
 
 Простой p2p отправитель файлов по локальной сети. (CLI)
 
@@ -21,10 +21,13 @@
 | Функция | Готовность |
 |---------|----------|
 | Отправка единичного файла | Работает |
-| Отправка папки и подпапок | Работает, отправляет только файлы, без папок |
+| Отправка папки и подпапок | Работает |
 | TUI | Скоро... |
 
 ---
+## Внимание
+LocalTransport сортирует local ip по RFC 1918
+Имеет защиту от symlink
 
 ## Быстрый старт
 

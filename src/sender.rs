@@ -2,11 +2,10 @@ use std::{fs::{self, File}, io::{self, Read, Write}, net::TcpStream, path::{Path
 use indicatif::ProgressBar;
 
 
-pub fn send_file(path: &str, stream: &mut TcpStream) -> std::io::Result<()>{
+pub fn send_file(path: &str, relative: &str, stream: &mut TcpStream) -> std::io::Result<()>{
     let file = File::open(path)?;
-    let file_name = Path::new(path).file_name().ok_or(io::Error::new(io::ErrorKind::NotFound,"Отсутствует"))?.to_string_lossy();
-
-    let name_bytes = file_name.as_bytes();
+   // let file_name = Path::new(path).file_name().ok_or(io::Error::new(io::ErrorKind::NotFound,"Отсутствует"))?.to_string_lossy();
+    let name_bytes = relative.as_bytes();
     stream.write_all(&(name_bytes.len() as u32).to_be_bytes())?;
     stream.write_all(name_bytes)?;
 
@@ -22,7 +21,7 @@ pub fn send_file(path: &str, stream: &mut TcpStream) -> std::io::Result<()>{
     println!("Отправлено байт {}", bytes_copy);
     Ok(())
 }
-
+/// берет путь и добавляет к нему имя 
 pub fn getting_file(stream: &mut TcpStream, path: &str) -> std::io::Result<()>{
     // TcpStream отдельно от TcpListener чтобы accept() не сбрасывался после окончания принятия
     let mut len_buf = [0u8; 4];
@@ -37,9 +36,11 @@ pub fn getting_file(stream: &mut TcpStream, path: &str) -> std::io::Result<()>{
     stream.read_exact(&mut buf)?;
     let file_len = u64::from_be_bytes(buf);
 
-    let mut file = if path.ends_with("/") { File::create(format!("{}{}", path, file_name))? } else {
-        File::create(format!("{}/{}", path, file_name))?
-    };
+    let full_path = Path::new(path).join(&*file_name);
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = File::create(full_path)?;
     
     let pb = ProgressBar::new(file_len);
     let mut limited_reader = pb.wrap_read(stream.take(file_len));
@@ -94,21 +95,26 @@ pub fn get_quantity(stream: &mut TcpStream) -> Result<u64, Box<dyn std::error::E
     }
 }
 
-fn send_directory(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+fn send_directory(path: &Path, root: &Path, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     for entry in fs::read_dir(path)? {
         let entry = entry?;
-        let path = entry.path();
-
+        let path = entry.path();  
+        if path.is_symlink() {
+            continue;
+        }
         if path.is_dir() {
-            send_directory(&path, stream)?;
+            send_directory(&path, root, stream)?;
         } else {
-            send_file(&path.to_string_lossy(), stream)?;
+            let relative = &path.strip_prefix(root)?.to_string_lossy().replace("\\", "/");
+            send_file(&path.to_string_lossy(), relative, stream)?;
         }
     }   
     Ok(())
 }
 
-fn files_quantity(path: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>>{
+pub fn send_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn files_quantity(path: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>>{
     let mut pathes = Vec::new();
     for entry in fs::read_dir(path)? {
         let entry = entry?;
@@ -127,14 +133,13 @@ fn files_quantity(path: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Er
     Ok(pathes)
 }
 
-pub fn send_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let files = files_quantity(path)?;
     send_quantity(files,stream)?;
 
-    send_directory(path, stream)
+    send_directory(path, path, stream)
 }
 
-pub fn get_all(path: &PathBuf, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>>{
+pub fn get_all(path: &Path, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>>{
     
     let quantity = get_quantity(stream);
 

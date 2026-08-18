@@ -2,6 +2,9 @@
 name = "localTransport"
 version = "0.1.0"
 edition = "2024"
+description = "..."
+license = "MIT"
+repository = "https://github.com/maxsimka4234/LocalTransport"
 
 [dependencies]
 mdns-sd = "0.21.0"
