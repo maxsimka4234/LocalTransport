@@ -52,10 +52,12 @@ pub fn receiver(service_type: &str) -> Result<(TcpStream, SocketAddr), Box<dyn s
     let local_addr = stream.local_addr()?;
 
     println!("TCP Запущен ");
-
+    tracing::debug!(target: "receiver", "Запущен TCP");
     let mdns = ServiceDaemon::new()?; 
     let servise_info = ServiceInfo::new(service_type, instance_name, host_name, local_ip, local_addr.port(), None)?;
+    tracing::debug!(target: "receiver", "Запущен MDNS {:?}",servise_info);
     mdns.register(servise_info)?;
+    
 
     let stream = stream.accept()?;
     Ok(stream)
@@ -69,7 +71,6 @@ pub fn send(service_type: &str, path: &str) -> Result<(), Box<dyn std::error::Er
         println!("Ищу хост... ");
         while let Ok(event) = receiver.recv() {
             match event {
-                
                 ServiceEvent::ServiceResolved(info) => {
                     println!("хост найден!");
                     let port = info.get_addresses_v4();
@@ -85,18 +86,23 @@ pub fn send(service_type: &str, path: &str) -> Result<(), Box<dyn std::error::Er
                     let path = PathBuf::from(path);
                     if path.is_dir() {
                         println!("это директория");
+                        tracing::debug!(target: "sender", "Определена директория");
                         itfile(&mut stream, false)?;
                         send_all(&path, &mut stream)?;
+                        tracing::debug!(target: "sender", "Все файлы были отправлены");
                     } else {
                         println!("это файл");
+                        tracing::debug!(target: "sender", "Определен файл");
                         itfile(&mut stream, true)?;
                         let file_name = path.file_name().ok_or("Ошибка в имени файла")?.to_string_lossy();
-                        send_file(&path.to_string_lossy(), &file_name, &mut stream)?; 
+                        send_file(&path.to_string_lossy(), &file_name, &mut stream)?;
+                        tracing::debug!(target: "sender", "Файл отправлен"); 
                     }
-                    
+                    break;
                 }
                 ServiceEvent::ServiceRemoved(serv_type, name ) => {
-                    println!("Хост {} ({}) удален", name, serv_type)
+                    println!("Хост {} ({}) удален", name, serv_type);
+                    break;
                 }
                 _ => {}
             }

@@ -1,10 +1,64 @@
+use std::env;
 use std::io::{self};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use tracing::Subscriber;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer};
+use tracing_subscriber::fmt::{FormatEvent, FormatFields};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
 
 use crate::streamer::{has_path, receiver, send};
-use crate::sender::{get_all};
+use crate::sender::{read_files};
 mod streamer; mod sender;
 
+struct TargetPrefix;
+
+impl<S, N> FormatEvent<S, N> for TargetPrefix where S: Subscriber + for<'a> LookupSpan<'a>, N: for<'a> FormatFields<'a> + 'static,{ 
+    fn format_event(
+        &self,
+        ctx: &tracing_subscriber::fmt::FmtContext<'_, S, N>,
+        mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        let meta = event.metadata();
+        write!(writer,"[{}] {}: ",meta.target(),meta.level(),)?;
+        
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
+    }
+}
+
+fn get_log_directory() -> PathBuf {
+    if let Ok(dir) = env::var("APP_LOG_DIR") {
+            return PathBuf::from(dir);
+    }
+    if cfg!(debug_assertions) {
+        env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+}
+
+fn create_tracing() {
+    let log_dir = get_log_directory();
+    let file_appender = tracing_appender::rolling::never(log_dir, "debug.log");
+    let (writer, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn,reciever=debug,sender=debug,all=debug"));
+
+    tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(writer)
+            .with_ansi(false)   
+            .event_format(TargetPrefix) 
+            .with_filter(filter.clone())
+    ).init(); 
+}
 fn hello() -> Result<(), Box<dyn std::error::Error>> {
     println!("Здравствуй! 1 - принимает файл (путь к итогу), 2 - отправляет файл (путь к файлу) ");
 
@@ -14,8 +68,9 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
     let input = input.trim().parse::<u8>().expect("Не число");
 
     let service_type = "_localTransfer._tcp.local.";
- 
 
+    create_tracing();
+                                
     match input {
         1 => {
         println!("Понял, я принимаю.\n Закончим настройку");
@@ -31,7 +86,9 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
         println!("Запустил поток! {:?}", &stream.0);
         let path = PathBuf::from(path);
 
-        get_all(&path, &mut stream.0)?;
+        tracing::debug!(target: "all", "Сведения о потоке: {:?}", stream);
+        
+        read_files(&path, &mut stream.0)?;
         
         }
 
@@ -46,7 +103,7 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
 
        
         let path = path.trim();
-            
+        tracing::debug!(target: "sender", "Начата отправка");
         send(service_type, path)?;
     
         }
@@ -57,6 +114,7 @@ fn hello() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
    hello()?;
+   println!("Пересылка завершена! ");
    Ok(())
 }
 
@@ -145,7 +203,7 @@ fn sender_test() -> Result<(), Box<dyn std::error::Error>>  {
     let path = PathBuf::from(&temp_file_get.path());
     temp_file_get.close()?;
     println!("get_all запуск! {:?}", path);
-    get_all(&path, &mut stream.0)?;
+    read_files(&path, &mut stream.0)?;
     println!("get_all great! {:?}", path);
     let file_name = temp_file_send.path().file_name().expect("Файл не найден").to_string_lossy();
     let path = format!("{}/{}", path.to_string_lossy(), file_name);
